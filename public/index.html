@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Couch Finder</title>
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header>
+    <h1>Couch Finder</h1>
+    <p>Local furniture search across Facebook Marketplace, Craigslist, OfferUp &amp; Nextdoor</p>
+  </header>
+
+  <div class="layout">
+    <div class="panel">
+      <h2>Search</h2>
+
+      <div class="field">
+        <label for="category">Category</label>
+        <select id="category">
+          <option value="couches">Couches</option>
+          <option value="tables">Tables</option>
+          <option value="chairs">Chairs</option>
+        </select>
+      </div>
+
+      <div class="tabs" id="priceTabs">
+        <button data-value="all" class="active">All</button>
+        <button data-value="for_sale">For Sale</button>
+        <button data-value="free">Free</button>
+      </div>
+
+      <div class="field">
+        <label for="address">Search origin</label>
+        <input id="address" type="text" value="3051 Adeline Ave, Berkeley, CA" />
+      </div>
+
+      <div class="field">
+        <label for="radius">Radius (miles)</label>
+        <input id="radius" type="number" value="50" min="1" max="200" />
+      </div>
+
+      <div id="dimsSection">
+        <h2>Couch dimensions (optional)</h2>
+        <div class="field dim-row">
+          <div>
+            <label>Min width (in)</label>
+            <input id="minWidth" type="number" />
+          </div>
+          <div>
+            <label>Max width (in)</label>
+            <input id="maxWidth" type="number" />
+          </div>
+        </div>
+        <div class="field dim-row">
+          <div>
+            <label>Min depth (in)</label>
+            <input id="minDepth" type="number" />
+          </div>
+          <div>
+            <label>Max depth (in)</label>
+            <input id="maxDepth" type="number" />
+          </div>
+        </div>
+        <div class="field dim-row">
+          <div>
+            <label>Min height (in)</label>
+            <input id="minHeight" type="number" />
+          </div>
+          <div>
+            <label>Max height (in)</label>
+            <input id="maxHeight" type="number" />
+          </div>
+        </div>
+      </div>
+
+      <button class="btn" id="searchBtn">Search</button>
+      <button class="btn secondary" id="addNextdoorBtn">+ Add Nextdoor listing</button>
+    </div>
+
+    <div>
+      <div class="note" id="dataNote">Loading data source status…</div>
+      <div class="results-header">
+        <h2 style="margin:0;">Results</h2>
+        <span class="count" id="resultCount"></span>
+      </div>
+      <div id="results" class="grid"></div>
+    </div>
+  </div>
+
+  <div class="modal-backdrop" id="modalBackdrop" style="display:none;">
+    <div class="modal">
+      <h3>Add a Nextdoor listing</h3>
+      <p class="meta">Nextdoor has no public API, so paste the listing details manually. It'll show up in search results tagged as a manual entry.</p>
+      <div class="field">
+        <label>Title</label>
+        <input id="ndTitle" type="text" />
+      </div>
+      <div class="field">
+        <label>Price (0 for free)</label>
+        <input id="ndPrice" type="number" />
+      </div>
+      <div class="field">
+        <label>URL (optional)</label>
+        <input id="ndUrl" type="text" />
+      </div>
+      <div class="field">
+        <label>Pasted description / dimensions</label>
+        <textarea id="ndText" placeholder="Paste the listing text here, e.g. dimensions like 84x36x32"></textarea>
+      </div>
+      <div class="modal-actions">
+        <button class="btn" id="ndSave">Save</button>
+        <button class="btn secondary" id="ndCancel">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

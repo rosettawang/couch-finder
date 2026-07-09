@@ -1,0 +1,16 @@
+{
+  "name": "couch-finder",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Local furniture (couch/table/chair) search app aggregating Facebook Marketplace, Craigslist, OfferUp, and Nextdoor (manual) listings within a radius, with couch dimension matching.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "apify-client": "^2.9.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "node-fetch": "^2.7.0"
+  }
+}
