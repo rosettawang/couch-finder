@@ -1,3 +1,8 @@
 node_modules/
 .env
 data/manualListings.json
+
+# Local search cache (regenerable scrape data + SQLite WAL/SHM). Not source.
+data/cache.db
+data/cache.db-wal
+data/cache.db-shm

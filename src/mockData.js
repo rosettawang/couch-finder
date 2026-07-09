@@ -15,11 +15,6 @@ const CITIES = {
   sacramento: { name: 'Sacramento, CA', lat: 38.5816, lon: -121.4944 }, // ~75mi, out of range
 };
 
-let idCounter = 1;
-function nextId(prefix) {
-  return `${prefix}-${idCounter++}`;
-}
-
 const COUCHES = [
   {
     title: 'Mid-century modern sofa, great condition - 84x36x32',
@@ -127,8 +122,10 @@ const CATEGORY_DATA = { couches: COUCHES, tables: TABLES, chairs: CHAIRS };
 // aggregation visible in the demo.
 function buildSourceListings(source, category) {
   const base = CATEGORY_DATA[category] || [];
+  // Stable ids (source+category+index) so repeated scrapes upsert the same
+  // cache rows instead of accumulating duplicates.
   return base.map((item, i) => ({
-    id: nextId(`${source}-${category}`),
+    id: `${source}-${category}-${i}`,
     source,
     title: item.title,
     price: item.price,

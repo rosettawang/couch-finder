@@ -7,25 +7,25 @@ const craigslist = require('./adapters/craigslist');
 const offerup = require('./adapters/offerup');
 const nextdoor = require('./adapters/nextdoor');
 
-const ADAPTERS = [facebookMarketplace, craigslist, offerup, nextdoor];
+// Keyed by the `source` string each adapter stamps onto its listings, so the
+// queue worker can fetch one source at a time by name.
+const ADAPTERS = {
+  facebook_marketplace: facebookMarketplace,
+  craigslist,
+  offerup,
+  nextdoor: nextdoor,
+};
 
-// Runs every source adapter in parallel; one source failing (e.g. bad actor
-// ID, Apify quota, network hiccup) doesn't take down the whole search.
-async function collectListings({ category, address, radiusMiles }) {
-  const settled = await Promise.allSettled(
-    ADAPTERS.map((adapter) => adapter.search({ category, address, radiusMiles }))
-  );
+// Source names the background queue refreshes by scraping. Nextdoor is manual
+// (user-entered), so it's read straight from the cache and never enqueued.
+const SCRAPED_SOURCES = ['facebook_marketplace', 'craigslist', 'offerup'];
 
-  const listings = [];
-  const errors = [];
-  settled.forEach((result, i) => {
-    if (result.status === 'fulfilled') {
-      listings.push(...result.value);
-    } else {
-      errors.push({ source: ADAPTERS[i].name || `adapter_${i}`, error: result.reason?.message });
-    }
-  });
-  return { listings, errors };
+// Fetch listings from a single source. Used by the queue worker; failures
+// propagate so the worker can record them on the job.
+async function fetchSource(source, { category, address, radiusMiles }) {
+  const adapter = ADAPTERS[source];
+  if (!adapter) throw new Error(`Unknown source: ${source}`);
+  return adapter.search({ category, address, radiusMiles });
 }
 
 function buildDimensionTarget({ minWidth, maxWidth, minDepth, maxDepth, minHeight, maxHeight }) {
@@ -36,18 +36,11 @@ function buildDimensionTarget({ minWidth, maxWidth, minDepth, maxDepth, minHeigh
   return target;
 }
 
-async function search(params) {
-  const {
-    category, // 'couches' | 'tables' | 'chairs'
-    priceType = 'all', // 'all' | 'for_sale' | 'free'
-    address,
-    radiusMiles,
-    dims = {}, // only meaningful for category === 'couches'
-  } = params;
-
-  const origin = await geocodeAddress(address);
-  const { listings, errors } = await collectListings({ category, address, radiusMiles });
-
+// Turn raw/cached listings into the shape the frontend renders: distance from
+// the search origin, parsed dimensions, dimension-match verdict, and the
+// radius/price/dimension filters applied. Origin comes from geocoding the
+// search address. This is applied at read time to whatever the cache holds.
+function enrichListings({ listings, origin, category, dims = {}, radiusMiles, priceType = 'all' }) {
   const dimTarget = category === 'couches' ? buildDimensionTarget(dims) : {};
 
   const enriched = listings
@@ -71,7 +64,14 @@ async function search(params) {
     return da - db;
   });
 
-  return { origin, listings: enriched, errors };
+  return enriched;
 }
 
-module.exports = { search };
+module.exports = {
+  ADAPTERS,
+  SCRAPED_SOURCES,
+  fetchSource,
+  enrichListings,
+  buildDimensionTarget,
+  geocodeAddress,
+};

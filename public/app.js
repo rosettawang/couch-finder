@@ -85,22 +85,51 @@ function escapeHtml(str) {
   return div.innerHTML;
 }
 
-async function runSearch() {
-  els.results.innerHTML = '<div class="loading">Searching…</div>';
+let pollTimer = null;
 
+function buildParams() {
   const params = new URLSearchParams({
     category: els.category.value,
     priceType: state.priceType,
     address: els.address.value,
     radiusMiles: els.radius.value,
   });
-
   if (els.category.value === 'couches') {
     ['minWidth', 'maxWidth', 'minDepth', 'maxDepth', 'minHeight', 'maxHeight'].forEach((id) => {
       const val = document.getElementById(id).value;
       if (val) params.set(id, val);
     });
   }
+  return params;
+}
+
+function formatEta(ms) {
+  if (!ms) return '';
+  const secs = Math.round(ms / 1000);
+  if (secs < 60) return `~${secs}s`;
+  return `~${Math.round(secs / 60)} min`;
+}
+
+// Show a refresh banner above results describing background scrape progress.
+function renderStatus(status, count) {
+  if (!status || status.done) {
+    if (state.configNote) els.dataNote.textContent = state.configNote;
+    return;
+  }
+  const c = status.counts || {};
+  const finished = (c.done || 0) + (c.error || 0);
+  const eta = formatEta(status.etaMs);
+  els.dataNote.textContent =
+    `Refreshing ${status.total} source job${status.total === 1 ? '' : 's'} in the background — ` +
+    `${finished}/${status.total} done${eta ? `, ${eta} remaining` : ''}. ` +
+    `Showing ${count} cached result${count === 1 ? '' : 's'} now; new ones appear as they arrive.`;
+}
+
+async function runSearch() {
+  if (pollTimer) clearTimeout(pollTimer);
+  els.results.innerHTML = '<div class="loading">Loading cached results…</div>';
+
+  const params = buildParams();
 
   try {
     const res = await fetch(`/api/search?${params.toString()}`);
@@ -108,12 +137,37 @@ async function runSearch() {
     if (!res.ok) throw new Error(data.error || 'Search failed');
     els.resultCount.textContent = `${data.count} result${data.count === 1 ? '' : 's'}`;
     renderResults(data.listings);
-    if (data.sourceErrors?.length) {
-      console.warn('Some sources failed:', data.sourceErrors);
+    renderStatus(data.status, data.count);
+    if (data.refreshing && data.searchId) {
+      pollStatus(data.searchId, params);
     }
   } catch (err) {
     els.results.innerHTML = `<div class="error">${escapeHtml(err.message)}</div>`;
   }
+}
+
+// Poll the status endpoint until all background jobs finish, merging in newly
+// scraped listings each tick.
+function pollStatus(searchId, params) {
+  const statusParams = new URLSearchParams(params);
+  statusParams.set('searchId', searchId);
+
+  const poll = async () => {
+    try {
+      const res = await fetch(`/api/search/status?${statusParams.toString()}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Status check failed');
+      els.resultCount.textContent = `${data.count} result${data.count === 1 ? '' : 's'}`;
+      renderResults(data.listings);
+      renderStatus(data.status, data.count);
+      if (!data.status || !data.status.done) {
+        pollTimer = setTimeout(poll, 2000);
+      }
+    } catch (err) {
+      console.warn('Status poll failed:', err.message);
+    }
+  };
+  pollTimer = setTimeout(poll, 2000);
 }
 
 async function loadConfig() {
@@ -128,9 +182,10 @@ async function loadConfig() {
     const mock = Object.entries(cfg.sourcesUsingLiveData)
       .filter(([, v]) => !v)
       .map(([k]) => sourceLabel(k));
-    els.dataNote.textContent = live.length
+    state.configNote = live.length
       ? `Live data: ${live.join(', ')}. Demo data: ${mock.join(', ') || 'none'}.`
       : `Running on demo/mock data for all sources except manual Nextdoor entries. Configure APIFY_TOKEN + actor IDs in .env for live results.`;
+    els.dataNote.textContent = state.configNote;
   } catch {
     els.dataNote.textContent = 'Could not load config — is the server running?';
   }
