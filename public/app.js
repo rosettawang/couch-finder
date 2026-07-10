@@ -63,7 +63,11 @@ function renderResults(listings) {
         : `${l.distanceMiles.toFixed(1)} mi away`;
 
     card.innerHTML = `
-      <div class="thumb">${l.imageUrl ? '' : 'No image'}</div>
+      <div class="thumb">${
+        l.imageUrl
+          ? `<img src="${encodeURI(l.imageUrl)}" alt="${escapeHtml(l.title)}" loading="lazy" onerror="this.parentElement.textContent='No image'">`
+          : 'No image'
+      }</div>
       <div class="body">
         <div class="title">${escapeHtml(l.title)}</div>
         <div class="price ${l.priceType}">${l.priceType === 'free' ? 'Free' : '$' + l.price}</div>

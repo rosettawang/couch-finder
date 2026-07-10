@@ -57,7 +57,11 @@ async function search({ category, address }) {
             lat: null,
             lon: null,
             url: item.url,
-            imageUrl: item.image || null,
+            // This actor returns `image` as an object ({url, width, height,
+            // __typename}) or sometimes a plain URL string -- normalize to the
+            // URL string here so the rest of the app just gets a src.
+            imageUrl:
+              (item.image && typeof item.image === 'object' ? item.image.url : item.image) || null,
             postedAt: null, // not provided by this actor
           }),
         })
