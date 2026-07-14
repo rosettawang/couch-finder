@@ -1,12 +1,16 @@
-const state = { priceType: 'all' };
+const state = { priceType: 'all', view: 'results', favorites: new Set(), lastResults: [] };
 
 const els = {
+  q: document.getElementById('q'),
+  categoryField: document.getElementById('categoryField'),
   category: document.getElementById('category'),
   address: document.getElementById('address'),
   radius: document.getElementById('radius'),
   dimsSection: document.getElementById('dimsSection'),
   results: document.getElementById('results'),
   resultCount: document.getElementById('resultCount'),
+  viewTabs: document.getElementById('viewTabs'),
+  favCount: document.getElementById('favCount'),
   dataNote: document.getElementById('dataNote'),
   priceTabs: document.getElementById('priceTabs'),
   searchBtn: document.getElementById('searchBtn'),
@@ -16,11 +20,18 @@ const els = {
   ndCancel: document.getElementById('ndCancel'),
 };
 
-function toggleDimsSection() {
-  els.dimsSection.style.display = els.category.value === 'couches' ? 'block' : 'none';
+// The category preset and couch-dimension filters only apply to a preset
+// search. When the free-text box has a value, hide both — that search goes
+// straight to the scrapers as a raw term.
+function updateFormMode() {
+  const freeText = els.q.value.trim().length > 0;
+  els.categoryField.style.display = freeText ? 'none' : 'block';
+  els.dimsSection.style.display =
+    !freeText && els.category.value === 'couches' ? 'block' : 'none';
 }
-els.category.addEventListener('change', toggleDimsSection);
-toggleDimsSection();
+els.category.addEventListener('change', updateFormMode);
+els.q.addEventListener('input', updateFormMode);
+updateFormMode();
 
 els.priceTabs.addEventListener('click', (e) => {
   const btn = e.target.closest('button');
@@ -40,15 +51,28 @@ function sourceLabel(source) {
 }
 
 function renderResults(listings) {
+  state.lastResults = listings;
   els.results.innerHTML = '';
   if (!listings.length) {
-    els.results.innerHTML = '<div class="empty">No listings match your filters yet.</div>';
+    const msg =
+      state.view === 'favorites'
+        ? 'No saved listings yet. Tap the ♥ on a result to save it.'
+        : 'No listings match your filters yet.';
+    els.results.innerHTML = `<div class="empty">${msg}</div>`;
     return;
   }
 
   listings.forEach((l) => {
     const card = document.createElement('div');
     card.className = 'card';
+    card.dataset.id = l.id;
+
+    const isFav = state.favorites.has(String(l.id));
+    const favBtn = `<button class="fav-btn ${isFav ? 'active' : ''}" data-id="${escapeHtml(
+      String(l.id)
+    )}" title="${isFav ? 'Remove from favorites' : 'Save to favorites'}" aria-label="Save to favorites">${
+      isFav ? '♥' : '♡'
+    }</button>`;
 
     const dimBadge =
       l.dimensionMatch === 'match' && l.dimensions?.parsed
@@ -63,11 +87,14 @@ function renderResults(listings) {
         : `${l.distanceMiles.toFixed(1)} mi away`;
 
     card.innerHTML = `
-      <div class="thumb">${
-        l.imageUrl
-          ? `<img src="${encodeURI(l.imageUrl)}" alt="${escapeHtml(l.title)}" loading="lazy" onerror="this.parentElement.textContent='No image'">`
-          : 'No image'
-      }</div>
+      <div class="thumb">
+        ${favBtn}
+        ${
+          l.imageUrl
+            ? `<img src="${encodeURI(l.imageUrl)}" alt="${escapeHtml(l.title)}" loading="lazy" onerror="this.parentElement.textContent='No image'">`
+            : 'No image'
+        }
+      </div>
       <div class="body">
         <div class="title">${escapeHtml(l.title)}</div>
         <div class="price ${l.priceType}">${l.priceType === 'free' ? 'Free' : '$' + l.price}</div>
@@ -92,17 +119,22 @@ function escapeHtml(str) {
 let pollTimer = null;
 
 function buildParams() {
+  const freeText = els.q.value.trim();
   const params = new URLSearchParams({
-    category: els.category.value,
     priceType: state.priceType,
     address: els.address.value,
     radiusMiles: els.radius.value,
   });
-  if (els.category.value === 'couches') {
-    ['minWidth', 'maxWidth', 'minDepth', 'maxDepth', 'minHeight', 'maxHeight'].forEach((id) => {
-      const val = document.getElementById(id).value;
-      if (val) params.set(id, val);
-    });
+  if (freeText) {
+    params.set('q', freeText);
+  } else {
+    params.set('category', els.category.value);
+    if (els.category.value === 'couches') {
+      ['minWidth', 'maxWidth', 'minDepth', 'maxDepth', 'minHeight', 'maxHeight'].forEach((id) => {
+        const val = document.getElementById(id).value;
+        if (val) params.set(id, val);
+      });
+    }
   }
   return params;
 }
@@ -195,7 +227,95 @@ async function loadConfig() {
   }
 }
 
-els.searchBtn.addEventListener('click', runSearch);
+// --- Favorites ---
+
+// Load saved listings into state (ids for marking hearts, and the full
+// snapshots for the Favorites view).
+async function loadFavorites() {
+  try {
+    const res = await fetch('/api/favorites');
+    const data = await res.json();
+    state.favoriteListings = data.listings || [];
+    state.favorites = new Set(state.favoriteListings.map((l) => String(l.id)));
+  } catch (err) {
+    console.warn('Could not load favorites:', err.message);
+    state.favoriteListings = [];
+  }
+  updateFavCount();
+}
+
+function updateFavCount() {
+  els.favCount.textContent = state.favorites.size ? `(${state.favorites.size})` : '';
+}
+
+// Save or unsave a listing, then refresh whichever view is showing.
+async function toggleFavorite(id) {
+  const key = String(id);
+  if (state.favorites.has(key)) {
+    await fetch(`/api/favorites/${encodeURIComponent(key)}`, { method: 'DELETE' });
+    state.favorites.delete(key);
+    state.favoriteListings = (state.favoriteListings || []).filter((l) => String(l.id) !== key);
+  } else {
+    const listing = state.lastResults.find((l) => String(l.id) === key);
+    if (!listing) return;
+    await fetch('/api/favorites', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ listing }),
+    });
+    state.favorites.add(key);
+    state.favoriteListings = [{ ...listing, favorited: true }, ...(state.favoriteListings || [])];
+  }
+  updateFavCount();
+
+  if (state.view === 'favorites') {
+    renderResults(state.favoriteListings);
+  } else {
+    // Just flip the heart on the affected card, no full re-render.
+    const btn = els.results.querySelector(`.fav-btn[data-id="${CSS.escape(key)}"]`);
+    if (btn) {
+      const isFav = state.favorites.has(key);
+      btn.classList.toggle('active', isFav);
+      btn.textContent = isFav ? '♥' : '♡';
+      btn.title = isFav ? 'Remove from favorites' : 'Save to favorites';
+    }
+  }
+}
+
+// Heart clicks (event delegation so it works for cards added by polling too).
+els.results.addEventListener('click', (e) => {
+  const btn = e.target.closest('.fav-btn');
+  if (!btn) return;
+  e.preventDefault();
+  toggleFavorite(btn.dataset.id);
+});
+
+// Results / Favorites view switch.
+els.viewTabs.addEventListener('click', (e) => {
+  const btn = e.target.closest('button');
+  if (!btn) return;
+  [...els.viewTabs.children].forEach((b) => b.classList.remove('active'));
+  btn.classList.add('active');
+  state.view = btn.dataset.view;
+  if (state.view === 'favorites') {
+    if (pollTimer) clearTimeout(pollTimer);
+    els.resultCount.textContent = `${state.favoriteListings.length} saved`;
+    renderResults(state.favoriteListings);
+  } else {
+    runSearch();
+  }
+});
+
+els.searchBtn.addEventListener('click', () => {
+  // Searching always returns to the results view.
+  if (state.view !== 'results') {
+    state.view = 'results';
+    [...els.viewTabs.children].forEach((b) =>
+      b.classList.toggle('active', b.dataset.view === 'results')
+    );
+  }
+  runSearch();
+});
 
 els.addNextdoorBtn.addEventListener('click', () => {
   els.modalBackdrop.style.display = 'flex';
@@ -221,4 +341,4 @@ els.ndSave.addEventListener('click', async () => {
   runSearch();
 });
 
-loadConfig().then(runSearch);
+Promise.all([loadConfig(), loadFavorites()]).then(runSearch);

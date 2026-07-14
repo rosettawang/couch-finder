@@ -9,7 +9,7 @@
 <body>
   <header>
     <h1>Couch Finder</h1>
-    <p>Local furniture search across Facebook Marketplace, Craigslist, OfferUp &amp; Nextdoor</p>
+    <p>Local marketplace search across Facebook Marketplace, Craigslist, OfferUp &amp; Nextdoor</p>
   </header>
 
   <div class="layout">
@@ -17,7 +17,13 @@
       <h2>Search</h2>
 
       <div class="field">
-        <label for="category">Category</label>
+        <label for="q">What are you looking for?</label>
+        <input id="q" type="text" placeholder="e.g. scaffolding, standing desk, bookshelf" />
+        <p class="field-hint">Leave blank to use the furniture presets below (with couch dimension matching).</p>
+      </div>
+
+      <div class="field" id="categoryField">
+        <label for="category">Category preset</label>
         <select id="category">
           <option value="couches">Couches</option>
           <option value="tables">Tables</option>
@@ -82,7 +88,10 @@
     <div>
       <div class="note" id="dataNote">Loading data source status…</div>
       <div class="results-header">
-        <h2 style="margin:0;">Results</h2>
+        <div class="tabs view-tabs" id="viewTabs">
+          <button data-view="results" class="active">Results</button>
+          <button data-view="favorites">♥ Favorites <span id="favCount"></span></button>
+        </div>
         <span class="count" id="resultCount"></span>
       </div>
       <div id="results" class="grid"></div>

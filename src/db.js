@@ -83,6 +83,15 @@ db.exec(`
   );
   CREATE INDEX IF NOT EXISTS idx_jobs_status ON fetch_jobs(status);
   CREATE INDEX IF NOT EXISTS idx_jobs_search ON fetch_jobs(search_id);
+
+  -- Saved/favorited listings. We snapshot the full listing JSON (rather than
+  -- just referencing listings.id) so a favorite survives even after the source
+  -- listing is re-scraped, evicted, or falls outside a later search's radius.
+  CREATE TABLE IF NOT EXISTS favorites (
+    id       TEXT PRIMARY KEY,   -- listing id
+    data     TEXT NOT NULL,      -- JSON snapshot of the listing
+    saved_at INTEGER NOT NULL
+  );
 `);
 
 module.exports = { db };
